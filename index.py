@@ -25,6 +25,18 @@ done = False
 pi = np.pi
 e = 1e-7
 
+images ={\
+    "shooter":pygame.image.load("images/shooter.png"),\
+    "laser":pygame.image.load("images/missile1.png"),\
+    "blue_ball":pygame.image.load("images/blue_ball.png"),\
+    "explosion1":pygame.image.load("images/explosion1.png"),\
+    "enemy1":pygame.image.load("images/enemy1.png"),\
+    "enemy2":pygame.image.load("images/enemy2.png"),\
+    "map1":pygame.image.load("images/map1.png"),\
+    "gameover":pygame.image.load("images/gameover.png")\
+}
+    
+
 def drawObject(obj,x,y):
     screen.blit(obj,(x,y))
     
@@ -50,24 +62,27 @@ def pixelCollision(rect1, rect2, hitmask1, hitmask2):
             if hitmask1[x1+x][y1+y] and hitmask2[x2+x][y2+y]:
                 return True
     return False
-    
+
+
+
 class shooter:
     def __init__(self):
         self.x = WIDTH * 0.4
         self.y = HEIGHT * 0.9
         self.v = 10
-        self.shooter_image = pygame.image.load("images/shooter.png")
-        self.missile_image = pygame.image.load("images/missile1.png")
+        self.shooter_image = images["shooter"]
+        self.missile_image = images["laser"]
         self.missileXY = []
         self.img_size = self.shooter_image.get_rect().size
         self.w = self.img_size[0]
         self.h = self.img_size[1]
         self.start = time.time()
+        self.die = False
         
     def display(self):
         drawObject(self.shooter_image, self.x, self.y)
-        for pos in self.missileXY:
-            drawObject(self.missile_image, pos[0], pos[1])
+        for missile in self.missileXY:
+            drawObject(missile.image, missile.x, missile.y)
         
     def reposition(self):
         if self.x < 0:
@@ -86,56 +101,57 @@ class shooter:
         self.x += dx
         self.y += dy
         self.reposition()
-        for i, pos in enumerate(self.missileXY):
-            pos[1] -= 15
-            self.missileXY[i][1] = pos[1]
-            if pos[1] <= 0:
+        for i, missile in enumerate(self.missileXY):
+            missile.move()
+            if not missile.isValidPos():
                 try:
-                    self.missileXY.remove(pos)
+                    self.missileXY.remove(missile)
                 except:
                     pass
-                
+
     def shoot(self):
-        self.missileXY.append([self.x + self.w * 0.5, self.y - self.missile_image.get_rect().size[1]])
-        
-        print(self.missileXY)
+        self.missileXY.append(missile(self.x + self.w * 0.5, self.y - images["laser"].get_rect().size[1],0,-15,"laser",1))
         
     def Collision(self, enemy):
         rect1 = pygame.Rect(enemy.x, enemy.y, enemy.w, enemy.h)
         hitmask1 = getHitMask(enemy.image)
         hitmask2 = getHitMask(self.missile_image)
         
-        for i in self.missileXY:
-            rect2 = pygame.Rect(i[0], i[1], self.missile_image.get_rect().size[0], self.missile_image.get_rect().size[1])
+        for missile in self.missileXY:
+            rect2 = pygame.Rect(missile.x, missile.y, missile.size[0], missile.size[1])
             if pixelCollision(rect1, rect2, hitmask1, hitmask2):
-                enemy.hp -= 5
+                enemy.hp = 0 if enemy.hp < 0 else enemy.hp - missile.damage
+                drawObject(images["explosion1"], missile.x - 30, missile.y - 30)
                 try:
-                    self.missileXY.remove(i)
+                    self.missileXY.remove(missile)
                 except:
                     pass
         
 class enemy:
-    def __init__(self, x = 0, y = 0, max_hp = 50, d = (1, 1)):
+    def __init__(self, x = 0, y = 0, lv = 1, max_hp = 50, d = (1, 1)):
         self.x = x
         self.y = y
         self.d = d      # direction vector
-        self.hp = max_hp - 30
+        self.hp = max_hp
         self.max_hp = max_hp
-        self.image = pygame.image.load("images/enemy1.png")
+        if lv == 1:
+            self.image = images["enemy1"]
+        elif lv == 2:
+            self.image = images["enemy2"]
         self.size = self.image.get_rect().size
         self.w = self.size[0]
         self.h = self.size[1]
         self.missileXY = []
         self.flag = True
     
-    def move(self):
-        if self.x < 300:
-            self.x += self.d[0]
+    def move(self, a = (1, 1)):
+        if self.x < 700:
+            self.x += self.d[0] * a[0]
+        else:
+            self.d = (-1, 0)
         if self.y < 300:
-            self.y += self.d[1]
-        #if len(self.missileXY) < 10:
-            #self.attack1()
-                    
+            self.y += self.d[1] * a[1]
+                   
     def render(self):
         if self.hp <= 0:
             return
@@ -152,16 +168,27 @@ class enemy:
                     except:
                         pass
         # Enemy hp bar
-        pygame.draw.rect(screen, GREEN, [30,30,int(690 * (self.hp / self.max_hp)),10])
+        pygame.draw.rect(screen, GREEN, [30, 30, int(690 * (self.hp / self.max_hp)), 10])
         
-    def attack1(self):
-        num_missile = 5
+    def attack1(self, a):
+        num_missile = 10
         x_ = self.x + self.size[0] / 2
         y_ = self.y + self.size[1] / 2
         for i in range(num_missile):
-            x__ = x_ + 50 * np.cos(2 * pi / num_missile * i)
-            y__ = y_ + 50 * np.sin(2 * pi / num_missile * i)
-            self.missileXY.append(missile(x__, y__, x__ - x_, y__ - y_))
+            x__ = x_ + 50 * np.cos(2 * pi / num_missile * i + a)
+            y__ = y_ + 50 * np.sin(2 * pi / num_missile * i + a)
+            self.missileXY.append(missile(x__, y__, x__ - x_, y__ - y_,"blue_ball"))
+    
+    def attack2(self, a):
+        num_missile = 10
+        x_ = self.x + self.size[0] / 2
+        y_ = self.y + self.size[1] / 2
+        for i in range(num_missile):
+            x__ = x_ + 50 * np.cos(pi / (num_missile) * i + a)
+            y__ = y_ + 50 * np.sin(pi / (num_missile) * i + a)
+            
+            self.missileXY.append(missile(x__, y__, x__ - x_, y__ - y_,"blue_ball"))
+        
             
     def Collision(self, player):
         rect1 = pygame.Rect(player.x, player.y, player.w, player.h)
@@ -171,21 +198,26 @@ class enemy:
         for i in self.missileXY:
             rect2 = pygame.Rect(i.x, i.y, i.size[0], i.size[1])
             if pixelCollision(rect1, rect2, hitmask1, hitmask2):
+                drawObject(images["explosion1"], i.x, i.y)
+                player.die = True
                 try:
                     self.missileXY.remove(i)
                 except:
                     pass
-                print("you die")
-            
+                print("you die")   
     
 class missile:
-    def __init__(self, x, y, d_x, d_y, damage = 10):
+    def __init__(self, x, y, d_x, d_y, t = "none",damage = 10):
         self.x = x
         self.y = y
         self.d_x = d_x
         self.d_y = d_y
+        self.t = t
         self.damage = damage
-        self.image = pygame.image.load("images/blue_ball.png")
+        if t == "blue_ball":
+            self.image = images["blue_ball"]
+        elif t == "laser":
+            self.image = images["laser"]
         self.size = self.image.get_rect().size
         
     def move(self, m_x = 1, m_y = 1):
@@ -195,54 +227,62 @@ class missile:
     def isValidPos(self):
         return not (self.x > WIDTH or self.x < 0 or self.y > HEIGHT or self.y < 0)
         
-background = pygame.image.load("images/map1.png")
-background2 = background.copy()
-background_y = 0
-background2_y = -HEIGHT
 player = shooter()
 it = 0
+(dx, dy) = (0,0)
 
-(dx, dy) = (0, 0)
-
-e = enemy()
+e1 = enemy(30,70,d = (1,0))
+e2 = enemy(30,70,2,100,(1,0.1))
+enemys = [e2]
 start = time.time()
+a = 0.1
 
 while not done:
-    drawObject(background, 0, background_y)
+    drawObject(images["map1"], 0, 0)
     for event in pygame.event.get():
         if event.type == KEYDOWN:
             if event.key == K_SPACE:
                 done = True
-            elif event.key == K_LEFT:
+            if event.key == K_LEFT:
                 dx -= player.v
-            elif event.key == K_RIGHT:
+            if event.key == K_RIGHT:
                 dx += player.v
-            elif event.key == K_UP:
+            if event.key == K_UP:
                 dy -= player.v
-            elif event.key == K_DOWN:
+            if event.key == K_DOWN:
                 dy += player.v
-            elif event.key == K_z:
+            if event.key == K_z:
                 player.shoot()
         if event.type == KEYUP:
             if event.key == K_LEFT or event.key == K_RIGHT:
                 dx = 0
             elif event.key == K_UP or event.key == K_DOWN:
                 dy = 0
-                    
-    if it % 30 == 14:
-        e.attack1()
-                
-    e.move()
-    e.render()
-    player.move(dx, dy)
-    player.display()
+
+    if it % 30 == 29:
+        e.attack2(a)
+        a*=-1
+     
+    for e in enemys:
+        e.move()
+        e.render()
+        if e.missileXY and e.hp:
+            e.Collision(player)
+        if player.missileXY and e.hp:
+            player.Collision(e)
+        
+    if not player.die:
+        player.move(dx, dy)
+        player.display()
+    else:
+        drawObject(images["gameover"],275,450)
+        pygame.display.flip()
+        pygame.time.delay(2000)
+        done = True    
+        
     
     pygame.display.flip()
     it = (it + 1) % FPS
     clock.tick(FPS)
-    if e.missileXY:
-        e.Collision(player)
-    if player.missileXY:
-        player.Collision(e)
     
 pygame.quit()
