@@ -355,7 +355,7 @@ a = 0.1
 
 while not done:
     screen.fill(BLACK)
-    #drawObject(images["map1"], 0, 0)
+    drawObject(images["map1"], 0, 0)
     for event in pygame.event.get():
         if event.type == KEYDOWN:
             if event.key == K_SPACE:
